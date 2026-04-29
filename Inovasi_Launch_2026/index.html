@@ -128,38 +128,42 @@
     // --- 关键修改：平板端点击按钮的同时立刻启动本地视频 ---
     // --- 强制修正版：确保平板点击必出视频 ---
     function triggerLaunch() { 
-        const v = document.getElementById('launchVideo');
-        
-        // 1. 如果是平板，因为这个函数是由 onclick 直接触发的，浏览器【必须】允许播放
+        // --- 核心修改：在信号发出前，立刻在本地点火 ---
         if (isTablet) {
-            v.muted = true; // 平板端静音（防止回声）
+            const v = document.getElementById('launchVideo');
+            v.muted = true; // 平板端强制静音
             
-            // 立即切换 UI 并播放
-            gsap.to("#main-ui", { opacity: 0, duration: 0.5, onComplete: () => {
-                document.getElementById('main-ui').style.display = 'none';
-                document.getElementById('video-layer').style.display = 'block';
-                v.play(); // 手指点下的瞬间，视频直接起跑
-            }});
+            // 关键：不等动画，直接播放
+            const playPromise = v.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    // 播放成功后，再慢慢隐藏 UI
+                    document.getElementById('main-ui').style.opacity = 0;
+                    setTimeout(() => {
+                        document.getElementById('main-ui').style.display = 'none';
+                        document.getElementById('video-layer').style.display = 'block';
+                    }, 500);
+                }).catch(error => {
+                    console.log("需预先交互:", error);
+                });
+            }
         }
 
-        // 2. 同时发送信号给大屏幕，让大屏也跟着动
-        pubnub.publish({ 
-            channel: channel, 
-            message: { a: 'l' } 
-        }); 
+        // 发送信号给大屏幕
+        pubnub.publish({ channel: channel, message: { a: 'l' } }); 
     }
 
     function executeGrandLaunch() {
         const v = document.getElementById('launchVideo');
-        // 平板端静音，大屏端带声音（前提是大屏端开场前点过一下）
-        if (isTablet) v.muted = true; else v.muted = false;
+        if (isTablet) return; // 平板端已经在 triggerLaunch 处理过了，这里跳过
 
+        // 电脑端的逻辑保持不变
+        v.muted = false;
         gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
             document.getElementById('main-ui').style.display = 'none';
             document.getElementById('video-layer').style.display = 'block';
-            v.play().catch(err => {
-                console.log("播放失败，请确保之前有过点击互动");
-            });
+            v.play();
         }});
     }
 </script>
