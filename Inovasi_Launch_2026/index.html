@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>IPGKI 2026 - Cybernetic Innovation Matrix</title>
+    <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        :root { --neon: #00f2ff; --energy: #fff; --bg: #000205; --glitch: #ff0055; }
+        body { margin: 0; background: var(--bg); overflow: hidden; color: white; font-family: 'Consolas', monospace; font-weight: bold; }
+
+        /* 全局 3D 透视空间 */
+        #hologram-container {
+            position: relative; width: 100vw; height: 100vh;
+            perspective: 2000px;
+            display: flex; flex-direction: column; align-items: center; justify-content: space-around;
+        }
+
+        #main-ui {
+            position: relative; z-index: 10;
+            transform: rotateX(15deg);
+            transform-style: preserve-3d;
+            width: 90vw; height: 80vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+
+        /* 动态粒子数据背景 */
+        #particle-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.15; }
+
+        /* --- 新增：赛博时钟与实时数据 (右上角) --- */
+        #realtime-data {
+            position: absolute; top: 3vh; right: 3vw;
+            text-align: right; color: var(--neon); font-size: 14px; letter-spacing: 2px;
+            transform: translateZ(30px); opacity: 0.8;
+        }
+        #cyber-clock { font-size: 20px; font-weight: 900; }
+
+        /* --- 新增：能量核心状态 (左侧) --- */
+        /* --- Matrix Overload: 左侧核心状态监测 --- */
+        #energy-core {
+            position: absolute; top: 50%; left: 1.5vw; transform: translateY(-50%) translateZ(40px);
+            width: 140px; height: 60vh; border-left: 2px solid rgba(0, 242, 255, 0.2); 
+            display: flex; flex-direction: column; justify-content: space-around; padding: 15px;
+            font-size: 10px; color: var(--neon); letter-spacing: 2px;
+        }
+        .energy-bar-wrap { width: 10px; height: 100%; background: rgba(0, 242, 255, 0.1); overflow: hidden; position: relative; margin: 10px 0; }
+        .energy-fill { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: var(--neon); animation: energySurge 2s ease-in-out infinite alternate; }
+        @keyframes energySurge { 0% { height: 30%; } 100% { height: 95%; } }
+        
+        /* 新增：状态参数小方格 */
+        .status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; opacity: 0.6; }
+        .status-box { width: 100%; height: 20px; background: rgba(0, 242, 255, 0.1); border: 1px solid rgba(0, 242, 255, 0.2); animation: boxPulse 2s infinite alternate; }
+        @keyframes boxPulse { to { opacity: 0.3; } }
+
+        /* 新增：右侧网络分析小窗口 */
+        #network-panel {
+            position: absolute; top: 50%; right: 1.5vw; transform: translateY(-50%) translateZ(40px);
+            width: 140px; height: 60vh; border-right: 2px solid rgba(0, 242, 255, 0.2);
+            padding: 15px; display: flex; flex-direction: column; justify-content: space-around;
+            color: var(--neon); font-size: 10px; letter-spacing: 2px;
+        }
+        .waveform { height: 60px; width: 100%; border: 1px solid rgba(0, 242, 255, 0.2); background: rgba(0, 242, 255, 0.05); }
+
+        /* --- 修改：使核心更突出 --- */
+        #main-ui { ... width: 95vw; ... } /* 把主界面宽度稍稍调大，给侧边留空间 */
+        .kinetic-title {
+            font-size: 2.8rem; letter-spacing: 15px; font-weight: 900;
+            color: #fff; text-shadow: 0 0 20px var(--neon), 0 0 40px var(--neon);
+            animation: glitchText 4s infinite alternate;
+        }
+        @keyframes glitchText { 0%, 100% { text-shadow: 0 0 20px var(--neon); } 5% { text-shadow: 2px 0 red, -2px 0 blue; } 10% { text-shadow: -2px 0 red, 2px 0 blue; } }
+
+        /* 巨型签名控制台 (保持原样) */
+        #sign-wrapper {
+            position: relative; width: 85vw; height: 50vh; margin: 30px auto;
+            border: 2px solid rgba(0, 242, 255, 0.3); border-radius: 4px;
+            background: linear-gradient(135deg, rgba(0, 10, 20, 0.2), rgba(0, 0, 0, 0.4));
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 80px rgba(0,0,0,0.9), inset 0 0 40px rgba(0, 242, 255, 0.1);
+            transform: translateZ(80px);
+            transform-style: preserve-3d;
+        }
+        /* --- 动态电流闪烁效果 --- */
+        .electric-glow {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 50px rgba(0, 242, 255, 0.2);
+            animation: electricFlash 0.2s infinite alternate;
+            opacity: 0;
+        }
+        @keyframes electricFlash {
+            0% { opacity: 0.1; }
+            100% { opacity: 0.3; box-shadow: inset 0 0 80px rgba(0, 242, 255, 0.4); }
+        }
+
+        /* --- 赛博刻度尺 (让四周不空) --- */
+        .frame-ruler {
+            position: absolute; color: var(--neon); font-size: 8px; opacity: 0.4;
+        }
+        .ruler-h { top: -15px; left: 0; width: 100%; display: flex; justify-content: space-between; letter-spacing: 5px; }
+        .ruler-v { top: 0; left: -15px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+
+        /* 全息装饰 Typography */
+        .decor-text { position: absolute; font-size: 11px; color: var(--neon); opacity: 0.7; letter-spacing: 3px; font-weight: normal; }
+
+        canvas#paintCanvas { width: 100%; height: 100%; touch-action: none; filter: drop-shadow(0 0 20px var(--energy)); }
+
+        /* --- 新增：创新概念浮现 (底部) --- */
+        #concept-stream {
+            position: absolute; bottom: 8vh; left: 50%; transform: translateX(-50%) translateZ(60px);
+            display: flex; gap: 30px; font-size: 14px; color: var(--neon); opacity: 0.5; letter-spacing: 3px;
+        }
+        .concept { animation: flicker 2s infinite; }
+        @keyframes flicker { 0%, 100% { opacity: 0.5; } 10%, 20% { opacity: 0.8; text-shadow: 0 0 5px var(--neon); } 15% { opacity: 0.3; } }
+
+        /* 启动按钮 (保持原样) */
+        .launch-btn-container { text-align: center; margin-top: 30px; display: flex; justify-content: center; position: relative; width: 100%; }
+        .launch-btn {
+            display: block; width: 100vw; max-width: 600px; padding: 25px;
+            background: rgba(0,242,255,0.05);
+            color: var(--neon); border: none; border-top: 2px solid var(--neon); border-bottom: 2px solid var(--neon);
+            font-size: 32px; font-weight: bold; letter-spacing: 20px; cursor: pointer;
+            transition: all 0.5s;
+        }
+        .launch-btn:hover { background: var(--neon); color: #000; box-shadow: 0 0 100px var(--neon); }
+
+        /* 视频层：确保 z-index 最高且全屏 (保持原样) */
+        #video-layer { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 10000; overflow: hidden; }
+        #video-layer video { width: 100%; height: 100%; object-fit: cover; }
+        #overlay-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; z-index: 10001; pointer-events: none;
+        }
+        #event-logo { width: 260px; filter: drop-shadow(0 0 30px var(--neon)); margin-bottom: 30px; }
+        .final-title { font-size: 3.5rem; text-align: center; text-shadow: 0 0 40px var(--neon); letter-spacing: 10px; font-weight: 900; }
+        /* 闪电的颜色与发光 */
+        /* --- High-Voltage: 增强版高压电流样式 --- */
+        #lightning-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 100; /* 关键：放到UI最上层，不再作为背景 */
+            pointer-events: none;
+            /* 关键：增加多重霓虹发光滤镜，使其有刺眼感 */
+            filter: drop-shadow(0 0 10px #fff) drop-shadow(0 0 20px #fff) drop-shadow(0 0 40px var(--neon));
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="particle-bg"></canvas>
+<canvas id="lightning-canvas"></canvas>
+
+<div id="hologram-container">
+    <div id="main-ui">
+        <div id="realtime-data">
+            <div id="cyber-clock">00:00:00</div>
+            <div>[ IPGKI_SEC_STATUS: SECURED ]</div>
+            <div>[ NET_LATENCY: 5ms ]</div>
+        </div>
+
+        <div id="energy-core">
+            <div style="opacity:0.4;">[ CORE_UNIT ]</div>
+            <div class="energy-bar-wrap"><div class="energy-fill"></div></div>
+            <div class="status-grid">
+                <div class="status-box"></div><div class="status-box" style="animation-delay:0.3s"></div><div class="status-box"></div>
+                <div class="status-box" style="animation-delay:0.6s"></div><div class="status-box"></div><div class="status-box" style="animation-delay:0.1s"></div>
+            </div>
+            <div style="margin-top:10px;">CORE_ENERGY SURGE</div>
+        </div>
+
+        <div id="network-panel">
+            <div style="text-align:right; opacity:0.4;">[ NET_UNIT ]</div>
+            <div class="waveform" style="animation: flicker 1s infinite;">
+                <svg width="100%" height="100%" viewBox="0 0 100 30">
+                    <polyline fill="none" stroke="#00f2ff" stroke-width="0.5" points="0,15 10,12 20,18 30,5 40,25 50,15 60,15 70,5 80,25 90,10 100,15"/>
+                </svg>
+            </div>
+            <div class="status-grid" style="text-align:right;">
+                <div class="status-box"></div><div class="status-box"></div><div class="status-box" style="animation-delay:0.4s"></div>
+                <div class="status-box" style="animation-delay:0.2s"></div><div class="status-box" style="animation-delay:0.5s"></div><div class="status-box"></div>
+            </div>
+            <div style="text-align:right;">LATENCY_MATRIX_SYNC</div>
+        </div>
+
+        <div class="event-header">
+            <div style="opacity: 0.5; font-size: 16px; letter-spacing: 5px;">PERTANDINGAN IPGKI</div>
+            <div class="kinetic-title">FORUM INOVASI 2026</div>
+        </div>
+
+        <div id="sign-wrapper">
+            <div class="electric-glow"></div>
+            
+            <div class="frame-ruler ruler-h"><span>00</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+            <div class="frame-ruler ruler-v"><span>MAX</span><span>MID</span><span>MIN</span></div>
+
+            <div class="scanline"></div>
+            <div class="corner tl"></div><div class="corner tr"></div>
+            <div class="corner bl"></div><div class="corner br"></div>
+            
+            <div class="decor-text" style="top:15px; left:20px;">[ ENERGY_ARC: STABLE ]</div>
+            <div class="decor-text" style="top:15px; right:20px;">[ SYNC_PULSE: 120Hz ]</div>
+            
+            <canvas id="paintCanvas"></canvas>
+        </div>
+
+        <div id="concept-stream">
+            <div class="concept">AI</div>
+            <div class="concept">IOT</div>
+            <div class="concept">CLOUD</div>
+            <div class="concept">FUTURE</div>
+            <div class="concept">UNITY</div>
+        </div>
+
+        <div class="launch-btn-container">
+            <button class="launch-btn" onclick="triggerLaunch()">LAUNCH</button>
+        </div>
+    </div>
+</div>
+
+<div id="video-layer">
+    <video id="launchVideo" src="launch_video2.mp4" playsinline muted preload="auto"></video>
+    <div id="overlay-ui">
+        <img src="logo.png" id="event-logo" onerror="this.style.display='none'"> 
+        <div class="final-title">DILANCARKAN</div>
+    </div>
+</div>
+
+<script>
+    // 动态粒子数据背景 (保持原样)
+    const pCanvas = document.getElementById('particle-bg');
+    const pctx = pCanvas.getContext('2d');
+    let particles = [];
+    function initParticles() {
+        pCanvas.width = window.innerWidth; pCanvas.height = window.innerHeight;
+        particles = Array.from({length: 150}, () => ({
+            x: Math.random() * pCanvas.width, y: Math.random() * pCanvas.height,
+            speed: Math.random() * 2 + 1, size: Math.random() * 2
+        }));
+    }
+    function drawParticles() {
+        pctx.clearRect(0,0,pCanvas.width, pCanvas.height);
+        pctx.fillStyle = "#fff";
+        particles.forEach(p => {
+            p.y -= p.speed; if(p.y < 0) p.y = pCanvas.height;
+            pctx.beginPath(); pctx.arc(p.x, p.y, p.size/2, 0, Math.PI*2); pctx.fill();
+        });
+        requestAnimationFrame(drawParticles);
+    }
+    initParticles(); drawParticles();
+
+    // --- 新增：赛博时钟逻辑 ---
+    
+    function updateClock() {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        document.getElementById('cyber-clock').textContent = `${h}:${m}:${s}`;
+    }
+    setInterval(updateClock, 1000); updateClock();
+    // --- 新增：赛博网络波动模拟逻辑 ---
+    function updateMatrixParams() {
+        // 在 Console 或 HUD 文本中模拟数据跳动
+        const debugText = document.querySelector('#realtime-data div:nth-child(2)'); // 找到 SECURED 行
+        if (debugText) {
+            const temp = (Math.random() * 5 + 32).toFixed(1);
+            debugText.textContent = `[ CORE_TEMP: ${temp}°C | STATUS: SECURED ]`;
+        }
+        
+        const netText = document.querySelector('#realtime-data div:nth-child(3)'); // 找到 LATENCY 行
+        if (netText) {
+            const lat = (Math.random() * 3 + 4).toFixed(1);
+            const loss = (Math.random() * 0.01).toFixed(2);
+            netText.textContent = `[ NET_LATENCY: ${lat}ms | LOSS: ${loss}% ]`;
+        }
+    }
+    setInterval(updateMatrixParams, 800); // 快速跳动，增加忙碌感
+
+    // PubNub & Canvas 初始化 (修复故障，多笔划流畅签名) (保持原样)
+    const pubnub = new PubNub({ publishKey: 'demo', subscribeKey: 'demo', userId: "master_cyber_matrix_"+Math.random() });
+    const channel = 'ipgki_grand_matrix_v1';
+    const canvas = document.getElementById('paintCanvas');
+    const ctx = canvas.getContext('2d');
+    const isTablet = new URLSearchParams(window.location.search).get('role') === 'tablet';
+
+    let allStrokes = [], currentPoints = [];
+
+    function setup() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = canvas.offsetWidth * dpr; canvas.height = canvas.offsetHeight * dpr; ctx.scale(dpr, dpr);
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 6;
+        ctx.shadowBlur = 20; ctx.shadowColor = '#00f2ff';
+    }
+    setup();
+
+    function redraw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        allStrokes.forEach(s => drawPath(s));
+        if(currentPoints.length > 0) drawPath(currentPoints);
+        // --- 模拟电流波动逻辑 ---
+    function simulateElectricArc() {
+        const glow = document.querySelector('.electric-glow');
+        if (glow) {
+            // 当有人正在签名时 (currentPoints 长度 > 0)，电流变强
+            if (currentPoints.length > 0) {
+                glow.style.opacity = Math.random() * 0.6 + 0.2;
+                glow.style.boxShadow = `inset 0 0 ${Math.random() * 100}px rgba(0, 242, 255, 0.6)`;
+            } else {
+                glow.style.opacity = Math.random() * 0.2;
+            }
+        }
+    }
+    // 每 50 毫秒波动一次，产生那种“滋滋”的电流视觉效果
+    setInterval(simulateElectricArc, 50);
+    }
+
+    function drawPath(p) {
+        if (p.length < 2) return;
+        ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
+        for (let i = 1; i < p.length - 2; i++) {
+            let xc = (p[i].x + p[i + 1].x) / 2;
+            let yc = (p[i].y + p[i + 1].y) / 2;
+            ctx.quadraticCurveTo(p[i].x, p[i].y, xc, yc);
+        }
+        if(p.length > 2) ctx.quadraticCurveTo(p[p.length-2].x, p[p.length-2].y, p[p.length-1].x, p[p.length-1].y);
+        ctx.stroke();
+    }
+
+    if (isTablet) {
+        canvas.addEventListener('pointerdown', e => {
+            const r = canvas.getBoundingClientRect();
+            currentPoints = [{x: e.clientX - r.left, y: e.clientY - r.top}];
+            pubnub.publish({ channel, message: { a: 's', x: currentPoints[0].x/canvas.width, y: currentPoints[0].y/canvas.height } });
+        });
+        canvas.addEventListener('pointermove', e => {
+            if (e.buttons !== 1) return;
+            const r = canvas.getBoundingClientRect();
+            const x = e.clientX - r.left, y = e.clientY - r.top;
+            currentPoints.push({x, y}); redraw();
+            pubnub.publish({ channel, message: { a: 'm', x: x/canvas.width, y: y/canvas.height } });
+        });
+        window.addEventListener('pointerup', () => {
+            if (currentPoints.length > 0) { allStrokes.push([...currentPoints]); currentPoints = []; }
+            pubnub.publish({ channel, message: { a: 'e' } });
+        });
+    }
+
+    pubnub.subscribe({ channels: [channel] });
+    pubnub.addListener({ message: m => {
+        const d = m.message;
+        if(!isTablet) {
+            if(d.a === 's') currentPoints = [{x: d.x*canvas.width, y: d.y*canvas.height}];
+            else if(d.a === 'm') { currentPoints.push({x: d.x*canvas.width, y: d.y*canvas.height}); redraw(); }
+            else if(d.a === 'e') { if(currentPoints.length>0)allStrokes.push([...currentPoints]); currentPoints=[]; }
+            else if(d.a === 'l') executeGrandLaunch();
+        } else if(d.a === 'l') { gsap.to("body", {opacity:0, duration: 1}); }
+    }});
+
+    function triggerLaunch() { pubnub.publish({ channel, message: { a: 'l' } }); }
+
+    // 转场动画 (保持原样)
+    function executeGrandLaunch() {
+        const v = document.getElementById('launchVideo');
+        const mainUI = document.getElementById('main-ui');
+        const videoLayer = document.getElementById('video-layer');
+        const overlay = document.getElementById('overlay-ui');
+
+        const flash = document.createElement('div');
+        flash.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:white;z-index:20000;opacity:0;";
+        document.body.appendChild(flash);
+
+        const tl = gsap.timeline();
+        tl.to(mainUI, { scale: 0.6, rotateY: 30, opacity: 0, filter: "brightness(8)", duration: 1, ease: "back.in(1.7)" })
+          .to(flash, { opacity: 1, duration: 0.1 }) 
+          .add(() => {
+              mainUI.style.display = 'none';
+              videoLayer.style.display = 'block';
+              v.play();
+          })
+          .to(flash, { opacity: 0, duration: 1 }); 
+        
+        v.addEventListener('timeupdate', function() {
+            if(v.currentTime > 4) { gsap.to(overlay, { opacity: 1, duration: 2 }); }
+        });
+        v.onended = () => { v.pause(); };
+    }
+    // --- High-Voltage: 增强版电流生成逻辑 ---
+    const lCanvas = document.getElementById('lightning-canvas');
+    const lctx = lCanvas.getContext('2d');
+    const signWrapper = document.getElementById('sign-wrapper');
+
+    function setupLightningCanvas() {
+        lCanvas.width = window.innerWidth;
+        lCanvas.height = window.innerHeight;
+    }
+    setupLightningCanvas();
+    window.addEventListener('resize', setupLightningCanvas);
+
+    // 绘制具有高亮核心的单条闪电
+    function createArc(x1, y1, x2, y2, segments) {
+        lctx.beginPath();
+        lctx.moveTo(x1, y1);
+        for (let i = 0; i < segments; i++) {
+            // High-Voltage: 增加抖动幅度，使其看起来更不稳定
+            x1 += (x2 - x1) / segments + (Math.random() - 0.5) * 60;
+            y1 += (y2 - y1) / segments + (Math.random() - 0.5) * 60;
+            lctx.lineTo(x1, y1);
+        }
+        lctx.lineTo(x2, y2);
+        
+        // High-Voltage: 采用更亮、更复杂的颜色组合
+        const colors = [ "#fff", "#00f2ff", "#bde0fe" ]; // 白色核心，霓虹蓝外围
+        lctx.strokeStyle = colors[Math.floor(Math.random()*colors.length)];
+        lctx.lineWidth = Math.random() * 3 + 2; // 笔划变粗
+        lctx.stroke();
+    }
+
+    function updateLightningMatrix() {
+        lctx.clearRect(0, 0, lCanvas.width, lCanvas.height);
+        
+        // 当VVIP签名时 (currentPoints 长度 > 0)，电流爆发
+        let chance = currentPoints.length > 0 ? 0.95 : 0.08; 
+        
+        if (Math.random() < chance) {
+            // 获取巨型签名框的确切位置
+            const rect = signWrapper.getBoundingClientRect();
+            
+            // High-Voltage: 随机决定是沿着框的上下、左右跳动
+            if (Math.random() > 0.5) { 
+                // 沿着巨型标题和签名板顶部闪现
+                createArc(rect.left - 50, rect.top - 20, rect.right + 50, rect.top - 20, 15);
+            } else { 
+                // 沿着整个签名板的垂直边缘和按钮上方跳动
+                createArc(rect.left - 30, rect.top + rect.height + 10, rect.right + 30, rect.top + rect.height + 10, 15);
+            }
+        }
+        requestAnimationFrame(updateLightningMatrix);
+    }
+    updateLightningMatrix();
+</script>
+</body>
+</html>
