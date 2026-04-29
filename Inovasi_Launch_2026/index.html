@@ -156,15 +156,44 @@
 
     function executeGrandLaunch() {
         const v = document.getElementById('launchVideo');
-        if (isTablet) return; // 平板端已经在 triggerLaunch 处理过了，这里跳过
-
-        // 电脑端的逻辑保持不变
-        v.muted = false;
-        gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
-            document.getElementById('main-ui').style.display = 'none';
-            document.getElementById('video-layer').style.display = 'block';
-            v.play();
-        }});
+        
+        if (isTablet) {
+            // --- 平板端：显示 Logo + 动态加载效果 ---
+            gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
+                document.getElementById('main-ui').style.display = 'none';
+                
+                // 1. 创建全屏启动容器
+                const launchLayer = document.createElement('div');
+                launchLayer.id = "launch-feedback";
+                launchLayer.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: #000; z-index: 10002;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                `;
+                
+                // 2. 插入 Logo 和 启动文字/进度条
+                launchLayer.innerHTML = `
+                    <img src="forum logo.jpg" style="width: 250px; margin-bottom: 40px; filter: drop-shadow(0 0 15px #00f2ff);">
+                    <div style="width: 200px; height: 2px; background: rgba(0,242,255,0.2); position: relative; overflow: hidden;">
+                        <div id="p-bar" style="position: absolute; width: 50px; height: 100%; background: #00f2ff; box-shadow: 0 0 10px #00f2ff;"></div>
+                    </div>
+                    <div id="l-text" style="color: #00f2ff; font-family: serif; font-size: 20px; margin-top: 20px; letter-spacing: 8px;">LAUNCHING...</div>
+                `;
+                document.body.appendChild(launchLayer);
+                
+                // 3. 动画：进度条流光 + 文字呼吸效果
+                gsap.to("#p-bar", { left: "100%", duration: 1.5, repeat: -1, ease: "power1.inOut" });
+                gsap.to("#l-text", { opacity: 0.3, duration: 0.8, repeat: -1, yoyo: true });
+            }});
+        } else {
+            // --- 电脑端：保持视频震撼播放 ---
+            v.muted = false;
+            gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
+                document.getElementById('main-ui').style.display = 'none';
+                document.getElementById('video-layer').style.display = 'block';
+                v.play();
+            }});
+        }
     }
 </script>
 </body>
