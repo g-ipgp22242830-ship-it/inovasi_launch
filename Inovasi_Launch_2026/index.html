@@ -57,8 +57,12 @@
         canvas.height = rect.height * dpr;
         ctx.scale(dpr, dpr);
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#0a1a3a'; ctx.lineWidth = 6; 
+        ctx.strokeStyle = '#0a1a3a'; // 这里换成你喜欢的颜色代码
+        ctx.lineWidth = 7;           // 稍微调粗到 7-8 左右，签名更有张力
+        // ----------------
     }
+    ctx.shadowColor = 'rgba(0,0,0,0.3)'; // 淡淡的黑色阴影
+        ctx.shadowBlur = 4;                  // 让笔划稍微浮起来一点
     window.onload = setup;
     window.onresize = setup;
 
