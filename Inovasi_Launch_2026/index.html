@@ -47,6 +47,7 @@
     const channel = 'ipgki_grand_matrix_v1';
     const canvas = document.getElementById('paintCanvas');
     const ctx = canvas.getContext('2d');
+    const v = document.getElementById('launchVideo');
     const isTablet = new URLSearchParams(window.location.search).get('role') === 'tablet';
 
     function setup() {
@@ -56,7 +57,7 @@
         canvas.height = rect.height * dpr;
         ctx.scale(dpr, dpr);
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#0a1a3a'; ctx.lineWidth = 5; 
+        ctx.strokeStyle = '#0a1a3a'; ctx.lineWidth = 6; 
     }
     window.onload = setup;
     window.onresize = setup;
@@ -65,18 +66,19 @@
 
     function redraw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        allStrokes.forEach(s => drawPath(s));
-        if(currentPoints.length > 0) drawPath(currentPoints);
+        allStrokes.forEach(s => {
+            if (s.length < 2) return;
+            ctx.beginPath(); ctx.moveTo(s[0].x, s[0].y);
+            s.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.stroke();
+        });
+        if(currentPoints.length > 0) {
+            ctx.beginPath(); ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
+            currentPoints.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.stroke();
+        }
     }
 
-    function drawPath(p) {
-        if (p.length < 2) return;
-        ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
-        for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
-        ctx.stroke();
-    }
-
-    // 只有带 ?role=tablet 的设备可以写
     if (isTablet) {
         canvas.addEventListener('pointerdown', e => {
             const r = canvas.getBoundingClientRect();
@@ -101,42 +103,36 @@
     pubnub.addListener({ message: m => {
         const d = m.message;
         const r = canvas.getBoundingClientRect();
-        
-        // 逻辑：收到签名信号则画图，收到启动信号 'l' 则同步播放视频
         if(d.a === 's' && !isTablet) { currentPoints = [{x: d.x*r.width, y: d.y*r.height}]; }
         else if(d.a === 'm' && !isTablet) { currentPoints.push({x: d.x*r.width, y: d.y*r.height}); redraw(); }
         else if(d.a === 'e' && !isTablet) { if(currentPoints.length>0)allStrokes.push([...currentPoints]); currentPoints=[]; }
         else if(d.a === 'l') { 
-            // 关键：两端都执行播放视频
-            executeGrandLaunch(); 
+            // 电脑端收到信号执行
+            if (!isTablet) executeGrandLaunch(); 
         }
     }});
 
-    // 修复版：确保平板点击时能立刻“抓住”视频播放权限
+    // --- 关键修改：平板端点击按钮的同时立刻启动本地视频 ---
     function triggerLaunch() { 
-        // 1. 如果是平板，先试着把视频加载并准备好
-        const v = document.getElementById('launchVideo');
         if (isTablet) {
-            v.muted = true; // 平板端建议静音，防止和大屏幕声音重叠
-            v.play().catch(e => console.log("等待同步启动...")); 
-            v.pause(); // 这一步是关键：先点火再熄火，骗过浏览器的拦截逻辑
+            // 1. 平板立刻本地启动（因为是手动点击，浏览器必允许）
+            executeGrandLaunch();
         }
-
-        // 2. 发送信号给所有端
-        pubnub.publish({ 
-            channel: channel, 
-            message: { a: 'l' } 
-        }); 
+        // 2. 发送信号让大屏幕启动
+        pubnub.publish({ channel, message: { a: 'l' } }); 
     }
 
     function executeGrandLaunch() {
         const v = document.getElementById('launchVideo');
+        // 平板端静音，大屏端带声音（前提是大屏端开场前点过一下）
+        if (isTablet) v.muted = true; else v.muted = false;
+
         gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
             document.getElementById('main-ui').style.display = 'none';
             document.getElementById('video-layer').style.display = 'block';
-            // 如果是平板，建议静音播放视频，避免和大屏幕声音冲突（也可以不静音）
-            if(isTablet) v.muted = true; 
-            v.play();
+            v.play().catch(err => {
+                console.log("播放失败，请确保之前有过点击互动");
+            });
         }});
     }
 </script>
