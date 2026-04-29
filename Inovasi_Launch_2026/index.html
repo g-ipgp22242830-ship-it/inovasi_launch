@@ -112,7 +112,22 @@
         }
     }});
 
-    function triggerLaunch() { pubnub.publish({ channel, message: { a: 'l' } }); }
+    // 修复版：确保平板点击时能立刻“抓住”视频播放权限
+    function triggerLaunch() { 
+        // 1. 如果是平板，先试着把视频加载并准备好
+        const v = document.getElementById('launchVideo');
+        if (isTablet) {
+            v.muted = true; // 平板端建议静音，防止和大屏幕声音重叠
+            v.play().catch(e => console.log("等待同步启动...")); 
+            v.pause(); // 这一步是关键：先点火再熄火，骗过浏览器的拦截逻辑
+        }
+
+        // 2. 发送信号给所有端
+        pubnub.publish({ 
+            channel: channel, 
+            message: { a: 'l' } 
+        }); 
+    }
 
     function executeGrandLaunch() {
         const v = document.getElementById('launchVideo');
