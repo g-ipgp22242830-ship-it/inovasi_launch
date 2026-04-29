@@ -126,13 +126,27 @@
     }});
 
     // --- 关键修改：平板端点击按钮的同时立刻启动本地视频 ---
+    // --- 强制修正版：确保平板点击必出视频 ---
     function triggerLaunch() { 
+        const v = document.getElementById('launchVideo');
+        
+        // 1. 如果是平板，因为这个函数是由 onclick 直接触发的，浏览器【必须】允许播放
         if (isTablet) {
-            // 1. 平板立刻本地启动（因为是手动点击，浏览器必允许）
-            executeGrandLaunch();
+            v.muted = true; // 平板端静音（防止回声）
+            
+            // 立即切换 UI 并播放
+            gsap.to("#main-ui", { opacity: 0, duration: 0.5, onComplete: () => {
+                document.getElementById('main-ui').style.display = 'none';
+                document.getElementById('video-layer').style.display = 'block';
+                v.play(); // 手指点下的瞬间，视频直接起跑
+            }});
         }
-        // 2. 发送信号让大屏幕启动
-        pubnub.publish({ channel, message: { a: 'l' } }); 
+
+        // 2. 同时发送信号给大屏幕，让大屏也跟着动
+        pubnub.publish({ 
+            channel: channel, 
+            message: { a: 'l' } 
+        }); 
     }
 
     function executeGrandLaunch() {
