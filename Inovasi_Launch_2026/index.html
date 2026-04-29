@@ -8,46 +8,34 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: 'Times New Roman', serif; }
-        
-        /* 1. 16:9 海报容器 */
         #main-ui { 
             position: relative; width: 100vw; height: 100vh; 
             background: url('signature.png') no-repeat center center; 
-            background-size: 100% 100%; /* 16:9 下完美铺满 */
-            display: flex; flex-direction: column; align-items: center;
+            background-size: 100% 100%; 
+            display: flex; justify-content: center; align-items: center;
         }
-
-        /* 2. 签名区域（已校准） */
+        /* 关键：确保签名区域不仅位置正确，而且在最顶层 */
         #sign-wrapper {
-            position: absolute; top: 54%; left: 50%; transform: translateX(-50%);
-            width: 48vw; height: 28vh; background: transparent; z-index: 10;
+            position: absolute; top: 54%; left: 50%; transform: translate(-50%, -50%);
+            width: 48vw; height: 28vh; z-index: 999; background: rgba(255,255,255,0.01); /* 微小的透明背景能捕获触摸事件 */
         }
-        canvas#paintCanvas { 
-            width: 100%; 
-            height: 100%; 
-            touch-action: none; 
-            /* --- 修复的核心：确保Canvas在最上层 --- */
-            position: relative;
-            z-index: 50; /* 只要比 main-ui 的 z-index 高即可 */
-        }
-
-        /* 3. 透明 LANCAR 按钮 */
+        #paintCanvas { width: 100%; height: 100%; touch-action: none; display: block; }
         .launch-btn {
             position: absolute; bottom: 12%; right: 7.5%;
             width: 12vw; height: 12vw; max-width: 150px; max-height: 150px;
-            background: rgba(0, 0, 0, 0); border: none; border-radius: 50%;
-            cursor: pointer; z-index: 100;
+            background: transparent; border: none; border-radius: 50%;
+            cursor: pointer; z-index: 1000;
         }
-
-        /* 4. 全屏视频层 */
-        #video-layer { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 10000; }
-        #video-layer video { width: 100%; height: 100%; object-fit: contain; } /* 使用 contain 保证视频比例不失真 */
+        #video-layer { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 10001; }
+        #video-layer video { width: 100%; height: 100%; object-fit: contain; }
     </style>
 </head>
 <body>
 
 <div id="main-ui">
-    <div id="sign-wrapper"><canvas id="paintCanvas"></canvas></div>
+    <div id="sign-wrapper">
+        <canvas id="paintCanvas"></canvas>
+    </div>
     <button class="launch-btn" onclick="triggerLaunch()"></button>
 </div>
 
@@ -56,112 +44,88 @@
 </div>
 
 <script>
-    // --- PubNub 与 签名同步逻辑 ---
-    const pubnub = new PubNub({ publishKey: 'demo', subscribeKey: 'demo', userId: "master_" + Math.random() });
+    // 1. 初始化 PubNub
+    const pubnub = new PubNub({ publishKey: 'demo', subscribeKey: 'demo', userId: "user_" + Math.random() });
     const channel = 'ipgki_grand_matrix_v1';
     const canvas = document.getElementById('paintCanvas');
     const ctx = canvas.getContext('2d');
+    
+    // 角色判定：URL 包含 ?role=tablet 才是签名端
     const isTablet = new URLSearchParams(window.location.search).get('role') === 'tablet';
-    let allStrokes = [], currentPoints = [];
 
-    function setup() {
+    function setupCanvas() {
+        const rect = canvas.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = canvas.offsetWidth * dpr; canvas.height = canvas.offsetHeight * dpr;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
         ctx.scale(dpr, dpr);
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#0a1a3a'; ctx.lineWidth = 6; 
+        ctx.strokeStyle = '#0a1a3a'; ctx.lineWidth = 5;
     }
-    setup();
-    window.addEventListener('resize', setup);
+    
+    window.onload = setupCanvas;
+    window.onresize = setupCanvas;
+
+    let allStrokes = [], currentPoints = [];
 
     function redraw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        allStrokes.forEach(s => drawPath(s));
-        if(currentPoints.length > 0) drawPath(currentPoints);
-    }
-
-    function drawPath(p) {
-        if (p.length < 2) return;
-        ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
-        for (let i = 1; i < p.length - 2; i++) {
-            let xc = (p[i].x + p[i + 1].x) / 2; let yc = (p[i].y + p[i + 1].y) / 2;
-            ctx.quadraticCurveTo(p[i].x, p[i].y, xc, yc);
+        allStrokes.forEach(stroke => {
+            if (stroke.length < 2) return;
+            ctx.beginPath(); ctx.moveTo(stroke[0].x, stroke[0].y);
+            stroke.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.stroke();
+        });
+        if (currentPoints.length > 1) {
+            ctx.beginPath(); ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
+            currentPoints.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.stroke();
         }
-        if(p.length > 2) ctx.quadraticCurveTo(p[p.length-2].x, p[p.length-2].y, p[p.length-1].x, p[p.length-1].y);
-        ctx.stroke();
     }
 
-    // --- 触屏与发布逻辑 ---
-    // --- 修复的核心：更简化的全屏比例计算 ---
+    // 平板端的触摸逻辑
     if (isTablet) {
-        // 使用 CSS 实际大小来计算比例，而不是 Canvas 的内部 buffer 大小
         canvas.addEventListener('pointerdown', e => {
             const r = canvas.getBoundingClientRect();
-            currentPoints = [{x: e.clientX - r.left, y: e.clientY - r.top}];
-            
-            // 发送信号给所有设备：使用百分比
-            pubnub.publish({ 
-                channel: channel, 
-                message: { 
-                    a: 's', 
-                    // 这里改用 offsetWidth/Height，确保和大屏完全对齐
-                    x: currentPoints[0].x / canvas.offsetWidth, 
-                    y: currentPoints[0].y / canvas.offsetHeight 
-                } 
-            });
+            const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+            currentPoints = [p];
+            pubnub.publish({ channel, message: { a: 's', x: p.x/r.width, y: p.y/r.height } });
         });
-
         canvas.addEventListener('pointermove', e => {
             if (e.buttons !== 1) return;
             const r = canvas.getBoundingClientRect();
-            const x = e.clientX - r.left;
-            const y = e.clientY - r.top;
-            currentPoints.push({x, y});
-            redraw();
-
-            pubnub.publish({ 
-                channel: channel, 
-                message: { 
-                    a: 'm', 
-                    x: x / canvas.offsetWidth, 
-                    y: y / canvas.offsetHeight 
-                } 
-            });
+            const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+            currentPoints.push(p); redraw();
+            pubnub.publish({ channel, message: { a: 'm', x: p.x/r.width, y: p.y/r.height } });
         });
-
         window.addEventListener('pointerup', () => {
-            if (currentPoints.length > 0) {
-                allStrokes.push([...currentPoints]);
-                currentPoints = [];
-            }
+            if (currentPoints.length > 0) { allStrokes.push([...currentPoints]); currentPoints = []; }
             pubnub.publish({ channel, message: { a: 'e' } });
         });
     }
 
+    // 接收端（电脑端）逻辑
     pubnub.subscribe({ channels: [channel] });
     pubnub.addListener({ message: m => {
         const d = m.message;
+        const r = canvas.getBoundingClientRect();
         if(!isTablet) {
-            if(d.a === 's') currentPoints = [{x: d.x*canvas.offsetWidth, y: d.y*canvas.offsetHeight}];
-            else if(d.a === 'm') { currentPoints.push({x: d.x*canvas.offsetWidth, y: d.y*canvas.offsetHeight}); redraw(); }
+            if(d.a === 's') currentPoints = [{ x: d.x * r.width, y: d.y * r.height }];
+            else if(d.a === 'm') { currentPoints.push({ x: d.x * r.width, y: d.y * r.height }); redraw(); }
             else if(d.a === 'e') { if(currentPoints.length>0)allStrokes.push([...currentPoints]); currentPoints=[]; }
             else if(d.a === 'l') executeGrandLaunch();
-        } else if(d.a === 'l') { gsap.to("body", {opacity:0, duration: 1}); }
+        } else if(d.a === 'l') { 
+            gsap.to("body", { opacity: 0, duration: 1 }); // 平板端点击后变黑，提示仪式开始
+        }
     }});
 
     function triggerLaunch() { pubnub.publish({ channel, message: { a: 'l' } }); }
 
-    // --- 仪式感启动动画 ---
     function executeGrandLaunch() {
         const v = document.getElementById('launchVideo');
-        const mainUI = document.getElementById('main-ui');
-        const videoLayer = document.getElementById('video-layer');
-        
-        // 瞬间变暗并无缝切换视频
-        gsap.to(mainUI, { opacity: 0, duration: 1.5, onComplete: () => {
-            mainUI.style.display = 'none';
-            videoLayer.style.display = 'block';
-            v.muted = false; // 确保播放时有声音（如果讲师已经有过点击交互）
+        gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
+            document.getElementById('main-ui').style.display = 'none';
+            document.getElementById('video-layer').style.display = 'block';
             v.play();
         }});
     }
