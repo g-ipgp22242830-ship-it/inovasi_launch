@@ -14,10 +14,19 @@
             background-size: 100% 100%; display: flex; align-items: center; justify-content: center;
         }
         /* 签名画板容器：确保在最上层且能接收触摸 */
+        /* --- 酷炫：给签名区加上霓虹边框 --- */
         #sign-wrapper {
-            position: absolute; top: 54%; left: 50%; transform: translate(-50%, -50%);
-            width: 48vw; height: 28vh; z-index: 100; touch-action: none;
-        }
+    position: absolute; 
+    /* --- 修改这里来对准 --- */
+    top: 70%;  /* 如果签名偏上，就调大（如 55%）；偏下就调小（如 53%） */
+    left: 50%; /* 如果签名偏左，就调大（如 51%）；偏右就调小（如 49%） */
+    /* -------------------- */
+    transform: translate(-50%, -50%);
+    width: 48vw; 
+    height: 28vh; 
+    z-index: 100; 
+    touch-action: none;
+}
         canvas#paintCanvas { width: 100%; height: 100%; display: block; }
         
         .launch-btn {
@@ -56,21 +65,15 @@
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
         ctx.scale(dpr, dpr);
-        
-        ctx.lineCap = 'round'; 
-        ctx.lineJoin = 'round';
-        
-        // --- 我为你选定的皇家高级配色 ---
-        ctx.strokeStyle = '#051025'; // 深蓝黑色 (Midnight Navy)
-        ctx.lineWidth = 8;           // 调粗一点，在大荧幕上才有张力
-        
-        // 加入轻微阴影，增加 3D 浮雕感
-        ctx.shadowColor = 'rgba(0,0,0,0.4)';
-        ctx.shadowBlur = 5;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        // -----------------------------
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#0a1a3a'; // 这里换成你喜欢的颜色代码
+        ctx.lineWidth = 7;           // 稍微调粗到 7-8 左右，签名更有张力
+        // ----------------
     }
+    ctx.shadowColor = 'rgba(0,0,0,0.3)'; // 淡淡的黑色阴影
+        ctx.shadowBlur = 4;                  // 让笔划稍微浮起来一点
+    window.onload = setup;
+    window.onresize = setup;
 
     let allStrokes = [], currentPoints = [];
 
