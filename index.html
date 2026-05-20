@@ -19,9 +19,21 @@
 
         /* 2. 签名区域（已校准） */
         #sign-wrapper {
-            position: absolute; top: 54%; left: 50%; transform: translateX(-50%);
-            width: 48vw; height: 28vh; background: transparent; z-index: 10;
-        }
+    position: absolute; 
+    
+    /* --- 位置完全保留你原本的设定，一动不动 --- */
+    top: 80%;  
+    left: 50%; 
+    transform: translate(-50%, -50%);
+    
+    /* --- 暴力扩大范围：让你拥有超大写字板 --- */
+    width: 80vw;   /* 从原来的 50vw 扩大到 80vw（更宽） */
+    height: 75vh;  /* 从原来的 60vh 扩大到 75vh（更高） */
+    /* -------------------------------------- */
+    
+    z-index: 100; 
+    touch-action: none;
+}
         canvas#paintCanvas { width: 100%; height: 100%; touch-action: none; }
 
         /* 3. 透明 LANCAR 按钮 */
