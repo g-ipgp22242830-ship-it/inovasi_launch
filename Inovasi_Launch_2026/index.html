@@ -128,32 +128,20 @@
     // --- 关键修改：平板端点击按钮的同时立刻启动本地视频 ---
     // --- 强制修正版：确保平板点击必出视频 ---
     function triggerLaunch() { 
-        // --- 核心修改：在信号发出前，立刻在本地点火 ---
         if (isTablet) {
             const v = document.getElementById('launchVideo');
-            v.muted = true; // 平板端强制静音
+            v.muted = true;
             
-            // 关键：不等动画，直接播放
-            const playPromise = v.play();
-            
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    // 播放成功后，再慢慢隐藏 UI
-                    document.getElementById('main-ui').style.opacity = 0;
-                    setTimeout(() => {
-                        document.getElementById('main-ui').style.display = 'none';
-                        document.getElementById('video-layer').style.display = 'block';
-                    }, 500);
-                }).catch(error => {
-                    console.log("需预先交互:", error);
-                });
-            }
+            // 1. 核心：不等视频结果，立刻在本地切到 Terima Kasih 页面
+            executeGrandLaunch();
+
+            // 2. 尝试后台播放（即使报错被拦截，也不影响上面 UI 的切换）
+            v.play().catch(e => console.log("Video blocked"));
         }
 
-        // 发送信号给大屏幕
+        // 3. 发送信号给大屏幕
         pubnub.publish({ channel: channel, message: { a: 'l' } }); 
     }
-
     function executeGrandLaunch() {
         const v = document.getElementById('launchVideo');
         
