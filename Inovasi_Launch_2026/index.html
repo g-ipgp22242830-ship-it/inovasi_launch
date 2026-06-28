@@ -158,35 +158,39 @@
         const v = document.getElementById('launchVideo');
         
         if (isTablet) {
-            // --- 平板端：显示 Logo + 动态加载效果 ---
+            // --- 平板端：彻底告别黑屏，显示 TERIMA KASIH ---
             gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
+                // 1. 隐藏旧 UI
                 document.getElementById('main-ui').style.display = 'none';
-                
-                // 1. 创建全屏启动容器
-                const launchLayer = document.createElement('div');
-                launchLayer.id = "launch-feedback";
-                launchLayer.style.cssText = `
+                // 2. 确保视频层在平板上保持关闭，防止黑屏遮挡
+                document.getElementById('video-layer').style.display = 'none';
+
+                // 3. 构建全屏感谢容器
+                const thankYouLayer = document.createElement('div');
+                thankYouLayer.id = "final-screen";
+                thankYouLayer.style.cssText = `
                     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-                    background: #000; z-index: 10002;
+                    background: #000; z-index: 99999;
                     display: flex; flex-direction: column; align-items: center; justify-content: center;
                 `;
                 
-                // 2. 插入 Logo 和 启动文字/进度条
-                launchLayer.innerHTML = `
-                    <img src="forum logo.png" style="width: 250px; margin-bottom: 40px; filter: drop-shadow(0 0 15px #00f2ff);">
-                    <div style="width: 200px; height: 2px; background: rgba(0,242,255,0.2); position: relative; overflow: hidden;">
-                        <div id="p-bar" style="position: absolute; width: 50px; height: 100%; background: #00f2ff; box-shadow: 0 0 10px #00f2ff;"></div>
+                // 4. 插入 Logo 和 感谢文字 (文件名空格已处理)
+                thankYouLayer.innerHTML = `
+                    <img src="forum%20logo.png" style="width: 280px; margin-bottom: 40px; filter: drop-shadow(0 0 15px #00f2ff);">
+                    <div style="color: #00f2ff; font-family: serif; font-size: 42px; letter-spacing: 10px; text-shadow: 0 0 20px rgba(0,242,255,0.6); margin-bottom: 20px;">
+                        TERIMA KASIH
                     </div>
-                    <div id="l-text" style="color: #00f2ff; font-family: serif; font-size: 20px; margin-top: 20px; letter-spacing: 8px;">LAUNCHING...</div>
+                    <div style="color: white; font-family: sans-serif; font-size: 18px; letter-spacing: 2px; opacity: 0.8;">
+                        Majlis Telah Dilancarkan
+                    </div>
                 `;
-                document.body.appendChild(launchLayer);
+                document.body.appendChild(thankYouLayer);
                 
-                // 3. 动画：进度条流光 + 文字呼吸效果
-                gsap.to("#p-bar", { left: "100%", duration: 1.5, repeat: -1, ease: "power1.inOut" });
-                gsap.to("#l-text", { opacity: 0.3, duration: 0.8, repeat: -1, yoyo: true });
+                // 5. 进场动画：让感谢页面优雅淡入
+                gsap.from(thankYouLayer, { opacity: 0, duration: 1.5, ease: "power2.out" });
             }});
         } else {
-            // --- 电脑端：保持视频震撼播放 ---
+            // --- 电脑端：维持震撼的视频播放 ---
             v.muted = false;
             gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
                 document.getElementById('main-ui').style.display = 'none';
