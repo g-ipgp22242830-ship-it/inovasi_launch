@@ -3,50 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>IPGKI 2026 - Majlis Perasmian</title>
+    <title>IPGKI 2026</title>
     <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Times New Roman', serif; }
-        
-        /* 1. 16:9 海报容器 */
+        body { margin: 0; background: #000; overflow: hidden; font-family: serif; }
         #main-ui { 
             position: relative; width: 100vw; height: 100vh; 
-            background: url('signature.png') no-repeat center center; 
-            background-size: 100% 100%; /* 16:9 下完美铺满 */
-            display: flex; flex-direction: column; align-items: center;
+            background: url('perasmian penutupan sign.jpg') no-repeat center center; 
+            background-size: 100% 100%; display: flex; align-items: center; justify-content: center;
         }
-
-        /* 2. 签名区域（已校准） */
+        /* 签名画板容器：确保在最上层且能接收触摸 */
+        /* --- 酷炫：给签名区加上霓虹边框 --- */
         #sign-wrapper {
     position: absolute; 
-    
-    /* --- 位置完全保留你原本的设定，一动不动 --- */
-    top: 80%;  
-    left: 50%; 
+    /* --- 修改这里来对准 --- */
+    top: 80%;  /* 如果签名偏上，就调大（如 55%）；偏下就调小（如 53%） */
+    left: 50%; /* 如果签名偏左，就调大（如 51%）；偏右就调小（如 49%） */
+    /* -------------------- */
     transform: translate(-50%, -50%);
-    
-    /* --- 暴力扩大范围：让你拥有超大写字板 --- */
-    width: 80vw;   /* 从原来的 50vw 扩大到 80vw（更宽） */
-    height: 75vh;  /* 从原来的 60vh 扩大到 75vh（更高） */
-    /* -------------------------------------- */
-    
+    width: 50vw; 
+    height: 60vh; 
     z-index: 100; 
     touch-action: none;
 }
-        canvas#paintCanvas { width: 100%; height: 100%; touch-action: none; }
-
-        /* 3. 透明 LANCAR 按钮 */
+        canvas#paintCanvas { width: 100%; height: 100%; display: block; }
+        
         .launch-btn {
             position: absolute; bottom: 12%; right: 7.5%;
             width: 12vw; height: 12vw; max-width: 150px; max-height: 150px;
-            background: rgba(0, 0, 0, 0); border: none; border-radius: 50%;
-            cursor: pointer; z-index: 100;
+            background: transparent; border: none; border-radius: 50%;
+            cursor: pointer; z-index: 200;
         }
 
-        /* 4. 全屏视频层 */
-        #video-layer { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 10000; }
-        #video-layer video { width: 100%; height: 100%; object-fit: contain; } /* 使用 contain 保证视频比例不失真 */
+        #video-layer { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 1000; }
+        #video-layer video { width: 100%; height: 100%; object-fit: contain; }
     </style>
 </head>
 <body>
@@ -57,58 +48,63 @@
 </div>
 
 <div id="video-layer">
-    <video id="launchVideo" src="pelancaran logo 1 empty (1).mp4" playsinline preload="auto"></video>
+    <video id="launchVideo" src="penutupan-A.mp4" playsinline preload="auto"></video>
 </div>
 
 <script>
-    // --- PubNub 与 签名同步逻辑 ---
-    const pubnub = new PubNub({ publishKey: 'demo', subscribeKey: 'demo', userId: "master_" + Math.random() });
+    const pubnub = new PubNub({ publishKey: 'demo', subscribeKey: 'demo', userId: "ipgki_" + Math.random() });
     const channel = 'ipgki_grand_matrix_v1';
     const canvas = document.getElementById('paintCanvas');
     const ctx = canvas.getContext('2d');
+    const v = document.getElementById('launchVideo');
     const isTablet = new URLSearchParams(window.location.search).get('role') === 'tablet';
-    let allStrokes = [], currentPoints = [];
 
     function setup() {
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = canvas.offsetWidth * dpr; canvas.height = canvas.offsetHeight * dpr;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
         ctx.scale(dpr, dpr);
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#0a1a3a'; ctx.lineWidth = 6; 
+        ctx.strokeStyle = '#0a1a3a'; // 这里换成你喜欢的颜色代码
+        ctx.lineWidth = 7;           // 稍微调粗到 7-8 左右，签名更有张力
+        // ----------------
     }
-    setup();
-    window.addEventListener('resize', setup);
+    ctx.shadowColor = 'rgba(0,0,0,0.3)'; // 淡淡的黑色阴影
+        ctx.shadowBlur = 4;                  // 让笔划稍微浮起来一点
+    window.onload = setup;
+    window.onresize = setup;
+
+    let allStrokes = [], currentPoints = [];
 
     function redraw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        allStrokes.forEach(s => drawPath(s));
-        if(currentPoints.length > 0) drawPath(currentPoints);
-    }
-
-    function drawPath(p) {
-        if (p.length < 2) return;
-        ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
-        for (let i = 1; i < p.length - 2; i++) {
-            let xc = (p[i].x + p[i + 1].x) / 2; let yc = (p[i].y + p[i + 1].y) / 2;
-            ctx.quadraticCurveTo(p[i].x, p[i].y, xc, yc);
+        allStrokes.forEach(s => {
+            if (s.length < 2) return;
+            ctx.beginPath(); ctx.moveTo(s[0].x, s[0].y);
+            s.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.stroke();
+        });
+        if(currentPoints.length > 0) {
+            ctx.beginPath(); ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
+            currentPoints.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.stroke();
         }
-        if(p.length > 2) ctx.quadraticCurveTo(p[p.length-2].x, p[p.length-2].y, p[p.length-1].x, p[p.length-1].y);
-        ctx.stroke();
     }
 
-    // --- 触屏与发布逻辑 ---
     if (isTablet) {
         canvas.addEventListener('pointerdown', e => {
             const r = canvas.getBoundingClientRect();
-            currentPoints = [{x: e.clientX - r.left, y: e.clientY - r.top}];
-            pubnub.publish({ channel, message: { a: 's', x: currentPoints[0].x/canvas.offsetWidth, y: currentPoints[0].y/canvas.offsetHeight } });
+            const p = {x: e.clientX - r.left, y: e.clientY - r.top};
+            currentPoints = [p];
+            pubnub.publish({ channel, message: { a: 's', x: p.x/r.width, y: p.y/r.height } });
         });
         canvas.addEventListener('pointermove', e => {
             if (e.buttons !== 1) return;
             const r = canvas.getBoundingClientRect();
-            const x = e.clientX - r.left, y = e.clientY - r.top;
-            currentPoints.push({x, y}); redraw();
-            pubnub.publish({ channel, message: { a: 'm', x: x/canvas.offsetWidth, y: y/canvas.offsetHeight } });
+            const p = {x: e.clientX - r.left, y: e.clientY - r.top};
+            currentPoints.push(p); redraw();
+            pubnub.publish({ channel, message: { a: 'm', x: p.x/r.width, y: p.y/r.height } });
         });
         window.addEventListener('pointerup', () => {
             if (currentPoints.length > 0) { allStrokes.push([...currentPoints]); currentPoints = []; }
@@ -119,29 +115,77 @@
     pubnub.subscribe({ channels: [channel] });
     pubnub.addListener({ message: m => {
         const d = m.message;
-        if(!isTablet) {
-            if(d.a === 's') currentPoints = [{x: d.x*canvas.offsetWidth, y: d.y*canvas.offsetHeight}];
-            else if(d.a === 'm') { currentPoints.push({x: d.x*canvas.offsetWidth, y: d.y*canvas.offsetHeight}); redraw(); }
-            else if(d.a === 'e') { if(currentPoints.length>0)allStrokes.push([...currentPoints]); currentPoints=[]; }
-            else if(d.a === 'l') executeGrandLaunch();
-        } else if(d.a === 'l') { gsap.to("body", {opacity:0, duration: 1}); }
+        const r = canvas.getBoundingClientRect();
+        if(d.a === 's' && !isTablet) { currentPoints = [{x: d.x*r.width, y: d.y*r.height}]; }
+        else if(d.a === 'm' && !isTablet) { currentPoints.push({x: d.x*r.width, y: d.y*r.height}); redraw(); }
+        else if(d.a === 'e' && !isTablet) { if(currentPoints.length>0)allStrokes.push([...currentPoints]); currentPoints=[]; }
+        else if(d.a === 'l') { 
+            // 电脑端收到信号执行
+            if (!isTablet) executeGrandLaunch(); 
+        }
     }});
 
-    function triggerLaunch() { pubnub.publish({ channel, message: { a: 'l' } }); }
+    // --- 关键修改：平板端点击按钮的同时立刻启动本地视频 ---
+    // --- 强制修正版：确保平板点击必出视频 ---
+    function triggerLaunch() { 
+        if (isTablet) {
+            const v = document.getElementById('launchVideo');
+            v.muted = true;
+            
+            // 1. 核心：不等视频结果，立刻在本地切到 Terima Kasih 页面
+            executeGrandLaunch();
 
-    // --- 仪式感启动动画 ---
+            // 2. 尝试后台播放（即使报错被拦截，也不影响上面 UI 的切换）
+            v.play().catch(e => console.log("Video blocked"));
+        }
+
+        // 3. 发送信号给大屏幕
+        pubnub.publish({ channel: channel, message: { a: 'l' } }); 
+    }
     function executeGrandLaunch() {
         const v = document.getElementById('launchVideo');
-        const mainUI = document.getElementById('main-ui');
-        const videoLayer = document.getElementById('video-layer');
         
-        // 瞬间变暗并无缝切换视频
-        gsap.to(mainUI, { opacity: 0, duration: 1.5, onComplete: () => {
-            mainUI.style.display = 'none';
-            videoLayer.style.display = 'block';
-            v.muted = false; // 确保播放时有声音（如果讲师已经有过点击交互）
-            v.play();
-        }});
+        if (isTablet) {
+            // --- 平板端：彻底告别黑屏，显示 TERIMA KASIH ---
+            gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
+                // 1. 隐藏旧 UI
+                document.getElementById('main-ui').style.display = 'none';
+                // 2. 确保视频层在平板上保持关闭，防止黑屏遮挡
+                document.getElementById('video-layer').style.display = 'none';
+
+                // 3. 构建全屏感谢容器
+                const thankYouLayer = document.createElement('div');
+                thankYouLayer.id = "final-screen";
+                thankYouLayer.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: #000; z-index: 99999;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                `;
+                
+                // 4. 插入 Logo 和 感谢文字 (文件名空格已处理)
+                thankYouLayer.innerHTML = `
+                    <img src="PERASMIAN PENUTUPAN (1).png" style="width: 280px; margin-bottom: 40px; filter: drop-shadow(0 0 15px #00f2ff);">
+                    <div style="color: #00f2ff; font-family: serif; font-size: 42px; letter-spacing: 10px; text-shadow: 0 0 20px rgba(0,242,255,0.6); margin-bottom: 20px;">
+                        TERIMA KASIH
+                    </div>
+                    <div style="color: white; font-family: sans-serif; font-size: 18px; letter-spacing: 2px; opacity: 0.8;">
+                        Majlis Telah Dilancarkan
+                    </div>
+                `;
+                document.body.appendChild(thankYouLayer);
+                
+                // 5. 进场动画：让感谢页面优雅淡入
+                gsap.from(thankYouLayer, { opacity: 0, duration: 1.5, ease: "power2.out" });
+            }});
+        } else {
+            // --- 电脑端：维持震撼的视频播放 ---
+            v.muted = false;
+            gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
+                document.getElementById('main-ui').style.display = 'none';
+                document.getElementById('video-layer').style.display = 'block';
+                v.play();
+            }});
+        }
     }
 </script>
 </body>
