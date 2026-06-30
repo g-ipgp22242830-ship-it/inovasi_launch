@@ -142,69 +142,53 @@
         // 3. 发送信号给大屏幕
         pubnub.publish({ channel: channel, message: { a: 'l' } }); 
     }
-    // --- 最终版：平板流光感谢页面 (TERIMA KASIH + 线条闪烁) ---
+    // --- 最终全黑版：平板显示感谢，大屏直接变纯黑 ---
     function executeGrandLaunch() {
-        const v = document.getElementById('launchVideo');
+        // 彻底停用原有的视频层
+        document.getElementById('video-layer').style.display = 'none';
         
         if (isTablet) {
-            // 平板端：强制立刻执行，不等待任何动画
-            console.log("Tablet Launch Successful"); 
-            
-            // 1. 彻底清空当前页面，防止旧 UI 干扰
+            // =================【 平板端逻辑 】=================
+            // 清空页面，显示闪烁的 TERIMA KASIH 和 loading 线条
             document.body.innerHTML = '';
-            document.body.style.background = '#000'; // 确保背景纯黑
+            document.body.style.background = '#000';
 
-            // 2. 重新构建启动成功界面层
             const thankYouLayer = document.createElement('div');
-            thankYouLayer.id = "thanks-feedback";
             thankYouLayer.style.cssText = `
                 position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
-                background: #000; z-index: 99999;
-                font-family: serif;
+                background: #000; z-index: 99999; font-family: serif;
             `;
             
-            // 注意：这里文件名空格已处理，增加兼容性
             thankYouLayer.innerHTML = `
-                <img src="PERASMIAN PENUTUPAN (1).png" style="width: 250px; margin-bottom: 40px; filter: drop-shadow(0 0 15px #00f2ff);">
+                <img src="forum%20logo.png" style="width: 250px; margin-bottom: 40px; filter: drop-shadow(0 0 15px #00f2ff);">
                 
                 <div style="width: 200px; height: 2px; background: rgba(0,242,255,0.2); position: relative; overflow: hidden; margin-bottom: 25px;">
                     <div id="loading-line" style="position: absolute; width: 50px; height: 100%; background: #00f2ff; box-shadow: 0 0 10px #00f2ff;"></div>
                 </div>
 
-                <div id="thanks-text" style="color: #00f2ff; font-size: 38px; letter-spacing: 12px; font-weight: bold; text-shadow: 0 0 20px #00f2ff; position: relative; z-index: 10;">
+                <div id="thanks-text" style="color: #00f2ff; font-size: 38px; letter-spacing: 12px; font-weight: bold; text-shadow: 0 0 20px #00f2ff;">
                     TERIMA KASIH
                 </div>
             `;
             document.body.appendChild(thankYouLayer);
             
-            // 3. 重新启动 GSAP 动画
+            // 启动平板动画
+            gsap.to("#loading-line", { left: "100%", duration: 1.5, repeat: -1, ease: "power1.inOut" });
+            gsap.to("#thanks-text", { opacity: 0.3, duration: 0.8, repeat: -1, yoyo: true, ease: "power1.inOut" });
 
-            // 动画 A：Loading 线条的流光效果 (从左到右循环流动)
-            gsap.to("#loading-line", { 
-                left: "100%", 
-                duration: 1.5, 
-                repeat: -1, 
-                ease: "power1.inOut" 
-            });
-
-            // 动画 B：“TERIMA KASIH” 文字的呼吸闪烁效果 (模拟霓虹灯呼吸)
-            gsap.to("#thanks-text", { 
-                opacity: 0.3, 
-                duration: 0.8, 
-                repeat: -1, 
-                yoyo: true, 
-                ease: "power1.inOut"
-            });
-            
         } else {
-            // 电脑端：维持原样，震撼播放启动视频
-            v.muted = false;
-            gsap.to("#main-ui", { opacity: 0, duration: 1, onComplete: () => {
-                document.getElementById('main-ui').style.display = 'none';
-                document.getElementById('video-layer').style.display = 'block';
-                v.play();
-            }});
+            // =================【 大屏幕电脑端逻辑 】=================
+            // 简单粗暴，直接全屏盖上一层纯黑色，连 1 毫秒的延迟都不要有
+            const blackoutLayer = document.createElement('div');
+            blackoutLayer.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                background: #000; z-index: 999999; /* 最高的层级，压住一切 */
+            `;
+            document.body.appendChild(blackoutLayer);
+            
+            // 优雅一点点：0.3秒快速切成死黑，营造戏剧感
+            gsap.from(blackoutLayer, { opacity: 0, duration: 0.3 });
         }
     }
 </script>
